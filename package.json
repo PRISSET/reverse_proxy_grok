@@ -1,0 +1,15 @@
+{
+  "name": "grok-browser-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local Grok browser bridge with isolated account profiles",
+  "engines": { "node": ">=22.16" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.mjs",
+    "accounts": "node --env-file-if-exists=.env src/accounts.mjs",
+    "test": "node --test --test-isolation=none test/*.test.mjs",
+    "check": "node scripts/check.mjs"
+  },
+  "dependencies": { "patchright": "1.64.1" }
+}
