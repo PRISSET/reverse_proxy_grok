@@ -168,6 +168,20 @@ test('missing token fails before text; failed completion stays an error', async 
   await assert.rejects(failed.promise, { code: 'incomplete_response' });
 });
 
+test('an empty incomplete response is a rate limit, a cut-off answer is not', async () => {
+  const quota = new Exchange(() => {}, ['response.done']);
+  quota.sent(JSON.stringify({ type: 'response.create', castle_request_token: 'test-only-token-unique-q1' }));
+  quota.received(JSON.stringify({ type: 'response.done', response: { status: 'incomplete' } }));
+  await assert.rejects(quota.promise, { code: 'rate_limit_exceeded', status: 429 });
+
+  const cut = new Exchange(() => {}, ['response.done']);
+  cut.sent(JSON.stringify({ type: 'response.create', castle_request_token: 'test-only-token-unique-q2' }));
+  cut.received(JSON.stringify({ type: 'response.output_text.delta', delta: 'partial' }));
+  cut.received(JSON.stringify({ type: 'response.done', response: { status: 'incomplete',
+    incomplete_details: { reason: 'max_output_tokens' } } }));
+  await assert.rejects(cut.promise, { code: 'incomplete_response', message: /max_output_tokens/ });
+});
+
 test('exchange ignores other conversation and response IDs on the same socket', async () => {
   const exchange = new Exchange(() => {}, ['response.done']);
   const send = (session, event) => JSON.stringify({ session_id: session, event });

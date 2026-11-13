@@ -62,7 +62,12 @@ export class Exchange {
     if (this.doneEvents.includes(event.type)) {
       const status = event.response?.status;
       if (status === 'failed' || status === 'cancelled' || status === 'incomplete') {
-        return this.fail(new ProxyError('Grok generation did not complete', 502, 'incomplete_response'));
+        // Grok signals an exhausted message quota as an empty 'incomplete' response, not as a 429 error.
+        if (status === 'incomplete' && !this.text) {
+          return this.fail(new ProxyError('Grok reported a rate limit (empty incomplete response)', 429, 'rate_limit_exceeded'));
+        }
+        const why = String(event.response?.incomplete_details?.reason || event.response?.error?.message || status).replace(/[^\w .:-]/g, '').slice(0, 120);
+        return this.fail(new ProxyError(`Grok generation did not complete (${why})`, 502, 'incomplete_response'));
       }
       if (!this.text) return this.fail(new ProxyError('Completed response contains no supported text chunks', 502, 'protocol_error'));
       this.finished = true;
