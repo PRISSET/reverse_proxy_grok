@@ -182,6 +182,19 @@ test('an empty incomplete response is a rate limit, a cut-off answer is not', as
   await assert.rejects(cut.promise, { code: 'incomplete_response', message: /max_output_tokens/ });
 });
 
+test('a Grok stream_error is reported by kind: usage limits as rate limits', async () => {
+  const limited = new Exchange(() => {}, ['response.done']);
+  limited.sent(JSON.stringify({ type: 'response.create', castle_request_token: 'test-only-token-unique-s1' }));
+  limited.received(JSON.stringify({ type: 'response.grok.output', output: { stream_error: {
+    kind: 'usage_limit_reached', message: "You've reached your usage limit.", severity: 'normal' } } }));
+  await assert.rejects(limited.promise, { code: 'rate_limit_exceeded', status: 429, message: /usage_limit_reached/ });
+
+  const other = new Exchange(() => {}, ['response.done']);
+  other.sent(JSON.stringify({ type: 'response.create', castle_request_token: 'test-only-token-unique-s2' }));
+  other.received(JSON.stringify({ type: 'response.grok.output', output: { stream_error: { kind: 'model_overloaded' } } }));
+  await assert.rejects(other.promise, { code: 'upstream_error', message: /model_overloaded/ });
+});
+
 test('exchange ignores other conversation and response IDs on the same socket', async () => {
   const exchange = new Exchange(() => {}, ['response.done']);
   const send = (session, event) => JSON.stringify({ session_id: session, event });

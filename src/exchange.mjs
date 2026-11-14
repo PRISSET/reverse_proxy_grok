@@ -46,6 +46,14 @@ export class Exchange {
     if (typeof event.type === 'string' && this.types.size < 100) this.types.add(event.type.replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 100));
     const error = upstreamError(event) || (event.response?.error ? upstreamError({ error: event.response.error }) : null);
     if (error) return this.fail(error);
+    const streamError = event.output?.stream_error;
+    if (streamError) {
+      // e.g. {kind: 'usage_limit_reached'}: a limit that /rest/rate-limits does not show, with no reset time.
+      const kind = String(streamError.kind || 'stream_error').replace(/[^\w.-]/g, '').slice(0, 80);
+      return this.fail(/limit/i.test(kind)
+        ? new ProxyError(`Grok reported a rate limit (${kind})`, 429, 'rate_limit_exceeded')
+        : new ProxyError(`Grok stream error (${kind})`, 502, 'upstream_error'));
+    }
     let delta = textChunk(event);
     if (!delta && (event.type === 'response.output_text.done' || this.doneEvents.includes(event.type))) {
       const final = completedText(event);
