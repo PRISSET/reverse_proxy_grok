@@ -21,6 +21,14 @@ export async function sendGatewayRequest({ prompt, images, eventId, mode, timeou
     const session = await request('/api/auth/session');
     userId = session?.session?.userId || session?.user?.id;
     if (!userId || session.status === 'unauthenticated') return fail('auth_required', 401);
+    // Grok's own quota for this mode: an exhausted account gets the exact reset time instead of an empty answer.
+    const quota = await fetch('/rest/rate-limits', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ requestKind: 'DEFAULT', modelName: mode }),
+      signal: AbortSignal.timeout(10000) }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (quota?.remainingQueries === 0) {
+      const wait = Math.ceil(Number(quota.waitTimeSeconds));
+      return fail('rate_limit_exceeded', 429, Number.isFinite(wait) && wait > 0 ? wait : null);
+    }
     for (const image of images) {
       const bytes = Uint8Array.from(atob(image.base64), character => character.charCodeAt(0));
       const form = new FormData();

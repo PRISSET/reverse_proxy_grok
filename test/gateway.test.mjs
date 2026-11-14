@@ -35,7 +35,7 @@ test('terminal assistant output is emitted when the server sends no deltas', asy
   assert.equal(await exchange.promise, 'visible');
 });
 
-async function gatewayFixture({ images = [], httpStatus = 200, handshakeError = null } = {}) {
+async function gatewayFixture({ images = [], httpStatus = 200, handshakeError = null, quota = null } = {}) {
   const sent = [], requests = [];
   let socket, minted = 0;
   class Socket {
@@ -61,7 +61,7 @@ async function gatewayFixture({ images = [], httpStatus = 200, handshakeError = 
     __grokProxyMint: async () => { minted++; return 'test-minted-token'; },
     fetch: async (url, options) => {
       requests.push({ url, options });
-      return { status: httpStatus, ok: httpStatus === 200, headers: { get: () => '12' }, json: async () => url === '/api/auth/session'
+      return { status: httpStatus, ok: httpStatus === 200, headers: { get: () => '12' }, json: async () => url === '/rest/rate-limits' ? quota : url === '/api/auth/session'
         ? { status: 'authenticated', session: { userId: 'fixture-user' } }
         : { fileMetadata: { fileMetadataId: `file-${requests.length}` } } };
     },
@@ -92,8 +92,8 @@ test('multiple images are uploaded by HTTP and referenced in the same WebSocket 
   assert.equal(uploads[0].options.method, 'POST');
   assert.equal(uploads[0].options.body.get('file').name, 'one.png');
   const item = fixture.sent[1].event.item;
-  assert.deepEqual(item.file_attachment_ids, ['file-2', 'file-3']);
-  assert.equal(item.x_grok.input_chunks[1].mention.file_mention.file_id, 'file-3');
+  assert.deepEqual(item.file_attachment_ids, ['file-3', 'file-4']);
+  assert.equal(item.x_grok.input_chunks[1].mention.file_mention.file_id, 'file-4');
 });
 
 test('HTTP and handshake limits are reported explicitly without a generation', async () => {
@@ -102,6 +102,18 @@ test('HTTP and handshake limits are reported explicitly without a generation', a
     assert.equal(fixture.minted, 0);
     assert.ok(!fixture.sent.some(packet => packet.event.type === 'response.create'));
   }
+});
+
+test('an exhausted Grok quota stops before uploads and reports the exact reset time', async () => {
+  const image = { name: 'one.png', mimeType: 'image/png', base64: Buffer.from('image-data').toString('base64') };
+  const fixture = await gatewayFixture({ images: [image], quota: { remainingQueries: 0, waitTimeSeconds: 83879 } });
+  assert.deepEqual({ ...fixture.result }, { ok: false, code: 'rate_limit_exceeded', status: 429, retryAfter: 83879 });
+  assert.ok(!fixture.requests.some(request => request.url === '/http/upload-file-v2/direct'));
+  assert.equal(fixture.minted, 0);
+  const quotaRequest = fixture.requests.find(request => request.url === '/rest/rate-limits');
+  assert.deepEqual(JSON.parse(quotaRequest.options.body), { requestKind: 'DEFAULT', modelName: 'fast' });
+  const left = await gatewayFixture({ quota: { remainingQueries: 3, waitTimeSeconds: 10 } });
+  assert.equal(left.result.ok, true);
 });
 
 test('Castle discovery selects the initialized SDK provider and invokes the chat flow', async () => {
