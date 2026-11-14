@@ -78,7 +78,7 @@ export function makeWorker(store, config, { launch = openBrowser, castle = prepa
       const result = await bounded(() => evaluateMain(page, sendGatewayRequest, {
         prompt: input.prompt,
         images: input.images.map(image => ({ name: image.name, mimeType: image.mimeType, base64: image.buffer.toString('base64') })),
-        eventId, mode: config.grokMode || 'fast', timeout: config.timeout,
+        eventId, mode: config.grokMode || 'auto', timeout: config.timeout,
       }), { timeout: config.timeout, signal: combined, code: 'upstream_timeout', message: 'Grok request preparation timed out' });
       if (!result?.ok) {
         const code = Object.hasOwn(messages, result?.code) ? result.code : 'upstream_error';

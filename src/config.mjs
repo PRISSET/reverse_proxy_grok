@@ -12,7 +12,7 @@ export const config = {
   stateDir: path.resolve(process.env.GROK_STATE_DIR || '.state'),
   logFile: path.resolve(process.env.GROK_LOG_FILE || 'log.json'),
   channel: process.env.GROK_CHROME_CHANNEL || 'chrome',
-  grokMode: process.env.GROK_MODE || 'fast',
+  grokMode: process.env.GROK_MODE || 'auto',
   headless: process.env.GROK_HEADLESS === 'true',
   locale: process.env.GROK_LOCALE || undefined,
   timezoneId: process.env.GROK_TIMEZONE || undefined,
